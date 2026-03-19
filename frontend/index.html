@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pedidos Fast</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root { --bg:#0b1220; --card:#121d31; --text:#e8edf8; --muted:#9aa7c4; --border:#21304f; --accent:#5d9cff; --danger:#ff6b6b; }
+    * { box-sizing:border-box; }
+    body { margin:0; min-height:100vh; font-family:'Inter',sans-serif; background: radial-gradient(circle at 0 0, #1c2f50 0%, #0b1220 45%, #070d17 100%); color:var(--text); }
+    .wrapper{ width:min(1000px,95%); margin:0 auto; padding:18px 0 24px; }
+    header{ display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; }
+    header h1{ margin:0; font-size:1.35rem; }
+    header .pill{padding:.25rem .7rem; border:1px solid rgba(255,255,255,.2); border-radius:999px; font-size:.75rem; color:#a9b8df;}
+    .grid2{ display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:14px; }
+    .card{ background:linear-gradient(140deg, rgba(16,27,52,.96), rgba(14,23,43,0.85)); border:1px solid var(--border); border-radius:14px; padding:14px; box-shadow:0 12px 45px rgba(0,0,0,.25); }
+    .card h2{ margin:0 0 8px;font-size:1rem; color:#fff; }
+    label{ display:block; margin:.42rem 0 .2rem; color:var(--muted); font-size:.9rem; }
+    input, button{ width:100%; border:1px solid #2e415f; border-radius:10px; background:#111f3a; color:#f2f7ff; font:inherit; padding:.55rem .65rem; }
+    input:focus{outline:2px solid #4f7fff; border-color:#5d8fff;}
+    button{ background:var(--accent); color:#fff; border:0; font-weight:600; cursor:pointer; transition:.12s; }
+    button:hover{ filter:brightness(1.04); }
+    .row{ display:flex; gap:.5rem; }
+    .row button{ width:auto; padding:.45rem .9rem; }
+    .small{font-size:.83rem;color:#99a9cf; margin-top:2px;}
+    .warning{color:var(--danger);} .success{color:#7ef2a8;}
+    .orders{margin-top:6px; overflow:auto; border:1px solid #233a66; border-radius:10px;}
+    table{width:100%; border-collapse:collapse; font-size:.9rem;}
+    th,td{border-bottom:1px solid #273a63; padding:.45rem .45rem; text-align:left; color:#e9f0ff;}
+    th{font-weight:700; font-size:.82rem; color:#9fb2d9; background:#0f1b35;}
+    tbody tr:hover{background:rgba(93,156,255,.08);}
+    .footer{font-size:.75rem; color:#8e9ec5; margin-top:6px; text-align:right;}
+    @media (max-width:640px){ .row{flex-direction:column;} }
+  </style>
+</head>
+<body>
+  <div class="wrapper">
+    <header>
+      <div>
+        <h1>Pedidos Fast</h1>
+        <div class="small">API Go + SQLite + JWT</div>
+      </div>
+      <div class="pill">Front Modernizado</div>
+    </header>
+    <div class="grid2">
+      <div class="card">
+        <h2>🔐 Login</h2>
+        <label>Email</label>
+        <input id="email" type="email" value="admin@api.com">
+        <label>Senha</label>
+        <input id="password" type="password" value="password">
+        <div class="row" style="margin-top:8px;"><button id="loginBtn">Fazer login</button></div>
+        <p id="loginMsg" class="small"></p>
+      </div>
+      <div class="card">
+        <h2>➕ Novo Pedido</h2>
+        <label>Cliente</label><input id="customer" type="text" value="João Silva">
+        <label>Itens</label><input id="items" type="text" value="Pizza média, refri">
+        <label>Total (R$)</label><input id="total" type="number" step="0.01" value="38.50">
+        <div class="row" style="margin-top:8px;"><button id="createBtn">Criar pedido</button></div>
+        <p id="createMsg" class="small"></p>
+      </div>
+    </div>
+    <div class="card" style="margin-top:12px;">
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <h2 style="margin:0;">🧾 Pedidos</h2>
+        <button id="refreshBtn" style="width:auto; padding:.4rem .7rem;">Atualizar</button>
+      </div>
+      <p id="ordersMsg" class="small"></p>
+      <div id="orders" class="orders"></div>
+    </div>
+    <div class="footer">Use POST /api/auth/login e /api/orders com token Bearer para integração.</div>
+  </div>
+  <script>
+    const loginBtn = document.getElementById('loginBtn')
+    const createBtn = document.getElementById('createBtn')
+    const refreshBtn = document.getElementById('refreshBtn')
+    let token = localStorage.getItem('api_token') || ''
+
+    const loginMsg = document.getElementById('loginMsg')
+    const createMsg = document.getElementById('createMsg')
+    const ordersMsg = document.getElementById('ordersMsg')
+    const ordersDiv = document.getElementById('orders')
+
+    function setToken(t) { token = t; localStorage.setItem('api_token', t) }
+
+    async function callApi(path, method='GET', body) {
+      const headers = { 'Content-Type': 'application/json' }
+      if (token) headers['Authorization'] = 'Bearer ' + token
+      const res = await fetch('/api' + path, { method, headers, body: body ? JSON.stringify(body) : undefined })
+      const text = await res.text()
+      let json
+      try { json = JSON.parse(text) } catch { json = { message: text } }
+      return { status: res.status, body: json }
+    }
+
+    loginBtn.addEventListener('click', async () => {
+      loginMsg.textContent = ''
+      const email = document.getElementById('email').value
+      const password = document.getElementById('password').value
+      const r = await callApi('/auth/login', 'POST', { email, password })
+      if (r.status === 200 && r.body.token) {
+        setToken(r.body.token)
+        loginMsg.className = 'success'
+        loginMsg.textContent = 'Logado! Token salvo.'
+      } else {
+        loginMsg.className = 'error'
+        loginMsg.textContent = r.body.error || r.body.message || 'Erro no login'
+      }
+    })
+
+    createBtn.addEventListener('click', async () => {
+      createMsg.textContent = ''
+      const customer_name = document.getElementById('customer').value
+      const items = document.getElementById('items').value
+      const total = parseFloat(document.getElementById('total').value)
+      const r = await callApi('/orders', 'POST', { customer_name, items, total })
+      if (r.status === 201) {
+        createMsg.className='success'; createMsg.textContent='Pedido criado!'; loadOrders()
+      } else {
+        createMsg.className='error'; createMsg.textContent=r.body.error||r.body.message||'Erro'
+      }
+    })
+
+    refreshBtn.addEventListener('click', () => loadOrders())
+
+    async function loadOrders() {
+      ordersMsg.textContent='Carregando...'
+      const r = await callApi('/orders')
+      if (r.status === 200) {
+        ordersMsg.textContent='OK'
+        if (Array.isArray(r.body)) {
+          if (r.body.length === 0) { ordersDiv.innerHTML='<p>Nenhum pedido</p>'; return }
+          const rows = r.body.map(o => `<tr><td>${o.id}</td><td>${o.customer_name}</td><td>${o.items}</td><td>R$ ${o.total.toFixed(2)}</td><td>${o.status}</td><td>${new Date(o.created_at).toLocaleString()}</td></tr>`).join('')
+          ordersDiv.innerHTML = `<table><thead><tr><th>ID</th><th>Cliente</th><th>Itens</th><th>Total</th><th>Status</th><th>Criado</th></tr></thead><tbody>${rows}</tbody></table>`
+        } else { ordersDiv.innerHTML = '<pre>' + JSON.stringify(r.body, null, 2) + '</pre>' }
+      } else {
+        ordersMsg.textContent = r.body.error || r.body.message || 'Erro ao listar'
+        ordersDiv.innerHTML = ''
+      }
+    }
+
+    if (token) {
+      loginMsg.className='small success'
+      loginMsg.textContent='Token carregado.'
+      loadOrders()
+    }
+  </script>
+</body>
+</html>
